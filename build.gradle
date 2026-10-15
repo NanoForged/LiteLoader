@@ -1,0 +1,202 @@
+import groovy.json.JsonOutput
+
+plugins {
+    id 'java'
+    id 'application'
+    // Apply false — we conditionally apply below based on useShadowJar
+    id 'com.gradleup.shadow' version '9.4.3' apply false
+}
+
+group = mod_group_id
+version = mod_version
+
+repositories {
+    mavenCentral()
+}
+
+// ==== ctrl ====
+
+// disable to copy full assets dir into target
+boolean isAssetsCopyStrictMode = true
+
+// is using shadow?
+boolean usingShadow = false
+
+// auto put `included` depends jar to modDir/libs/*
+boolean bringYouOwnJars = false
+
+// ==== meta builder ====
+def mod_Meta = [
+        id             : mod_id,
+        name           : mod_name,
+        author         : mod_author,
+        version        : mod_version,
+        description    : mod_description,
+        gameVersion    : starsector_version,
+        totalConversion: false,
+        jars           : ["jars/${mod_id}.jar"],
+        dependencies   : [],
+        modPlugin      : mod_main_class,
+]
+
+
+
+def gameInstallPath = starsector_path
+def gameCorePath = "$gameInstallPath/starsector-core"
+def apiJarPath = "$gameCorePath/starfarer.api.jar"
+def gameModsPath = "$gameInstallPath/mods"
+
+def gameJars = fileTree(gameCorePath){ include '*.jar' }
+def apiJar = files(apiJarPath)
+
+configurations {
+    create('included')
+}
+
+dependencies {
+    implementation(apiJar)
+    runtimeOnly(gameJars)
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:all' << '-Werror'
+}
+
+// ───── Remove test source set — Starsector mods don't need tests ─────
+sourceSets {
+    test {
+        java.setSrcDirs([])
+        resources.setSrcDirs([])
+    }
+}
+
+
+
+
+if (usingShadow) {
+    apply plugin: 'com.gradleup.shadow'
+
+    shadowJar {
+        archiveClassifier.set('')
+        archiveVersion.set('')
+
+        // Only relocate if you expect dependency conflicts with other mods.
+        // For most Starsector mods this isn't needed.
+        // relocate 'com.example.lib', 'your.mod.shaded.lib'
+
+        // Minimise: strip unused classes from shaded jars — saves size.
+        minimize()
+    }
+} else {
+    // Regular jar still needs to be built
+    jar {
+        archiveClassifier.set('')
+        archiveVersion.set('')
+    }
+}
+
+
+
+
+
+tasks.register('generateModInfo') {
+    group = 'StarsectorModDev'
+
+    def outputDir = layout.buildDirectory.dir('generated/modInfo')
+    outputs.dir(outputDir)
+
+    doLast {
+        def outFile = outputDir.get().file('mod_info.json').asFile
+        outFile.parentFile.mkdirs()
+        outFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(mod_Meta))
+    }
+}
+
+
+
+def modJarProvider = usingShadow ? tasks.named('shadowJar') : tasks.named('jar')
+
+def stagingDir = layout.buildDirectory.dir("staging/${mod_id}")
+
+tasks.register('stageMod', Sync) {
+    group = 'StarsectorModDev'
+
+    dependsOn modJarProvider
+    dependsOn tasks.named('generateModInfo')
+
+    from(modJarProvider.map { it.outputs.files }) {
+        rename { "${mod_id}.jar" }
+        into 'jars'
+    }
+
+    from(layout.buildDirectory.dir('generated/modInfo')) {
+        include 'mod_info.json'
+    }
+
+    if (bringYouOwnJars) {
+        from(configurations.included) {
+            into 'libs'
+        }
+    }
+
+    if (isAssetsCopyStrictMode){
+        from("$projectDir/assets/data")  { into 'data'  }
+        from("$projectDir/assets/graphics") { into 'graphics' }
+        from("$projectDir/assets/sounds") { into 'sounds'  }
+    } else {
+        from("$projectDir/assets")
+    }
+
+
+    into stagingDir
+}
+
+tasks.register('toGame', Sync) {
+    group = 'StarsectorModDev'
+
+    dependsOn tasks.named('stageMod')
+
+    from stagingDir
+    into "${gameModsPath}/${mod_id}"
+}
+
+tasks.register('deployMod') {
+    group = 'StarsectorModDev'
+
+    dependsOn clean
+    dependsOn tasks.named('toGame')
+}
+
+tasks.register('releaseZip', Zip) {
+    group = 'StarsectorModDev'
+
+    dependsOn tasks.named('stageMod')
+
+    archiveFileName = "${mod_name}-${mod_version}.zip"
+    destinationDirectory = layout.buildDirectory.dir('dist')
+
+    from stagingDir
+}
+
+
+tasks.named('run') {
+    group = 'StarsectorModDev'
+    dependsOn tasks.named('deployMod')
+
+    workingDir = file(gameCorePath)
+}
+
+
+application {
+    def args = layout.projectDirectory.file("args.txt").toString()
+    applicationDefaultJvmArgs = ['-noverify',"@${args}","-Djava.library.path=${gameCorePath}/native/windows","-Dcom.fs.starfarer.settings.paths.saves=${gameInstallPath}/saves","-Dcom.fs.starfarer.settings.paths.screenshots=${gameInstallPath}/screenshots","-Dcom.fs.starfarer.settings.paths.logs=${gameInstallPath}","-Dcom.fs.starfarer.settings.paths.mods=${gameInstallPath}/mods"]
+    mainClass = 'com.fs.starfarer.StarfarerLauncher'
+
+}
+
