@@ -16,7 +16,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public final class LaunchHelper {
-    private static final Logger LOGGER = LogManager.getLogger("NanoForge/Bootstrap");
+    private static final Logger LOGGER = LogManager.getLogger("Flux/Bootstrap");
 
     private static final List<String> GAME_PACKAGE_PREFIXES = List.of("com.fs.", "cdd.", "zzz.", "sound.");
     private static final List<String> GAME_LIBRARY_PACKAGE_PREFIXES = List.of(
