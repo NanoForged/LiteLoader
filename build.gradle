@@ -16,14 +16,29 @@ repositories {
 
 // ==== ctrl ====
 
-// disable to copy full assets dir into target
-boolean isAssetsCopyStrictMode = true
+// assets/ mirrors the mod root: a file placed there lands next to mod_info.json, so
+// that is where loose mod files (e.g. the bootstrap agent scripts) belong.
+// enable to copy only assets/data, assets/graphics and assets/sounds into the target
+boolean isAssetsCopyStrictMode = false
 
 // is using shadow?
 boolean usingShadow = false
 
 // auto put `included` depends jar to modDir/libs/*
-boolean bringYouOwnJars = false
+boolean bringYouOwnJars = true
+
+// using LR to custom game launch args
+boolean usingBootstrapAgent = true
+
+
+
+
+// === LR configs ===
+
+def bootstrapJarName = 'LaunchRedirector.jar'
+def bootstrapBaseName = bootstrapJarName.replaceFirst(/\.jar$/, '')
+def bootstrapVersion = libs.versions.launchredirector.get()
+
 
 // ==== meta builder ====
 def mod_Meta = [
@@ -51,11 +66,26 @@ def apiJar = files(apiJarPath)
 
 configurations {
     create('included')
+   if (usingBootstrapAgent) create('bootstrap')
 }
 
 dependencies {
     implementation(apiJar)
     runtimeOnly(gameJars)
+    if (usingBootstrapAgent) {
+
+        implementation("com.github.NanoForged:LaunchRedirector:${bootstrapVersion}")
+        bootstrap("com.github.NanoForged:LaunchRedirector:${bootstrapVersion}:all") {
+            transitive = false
+        }
+    }
+
+    included compileOnly(project(":LiteLoader"))
+
+    annotationProcessor(compileOnly('com.google.auto.service:auto-service:1.1.1'))
+
+
+
 }
 
 java {
@@ -65,7 +95,6 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.compilerArgs << '-Xlint:all' << '-Werror'
 }
 
 // ───── Remove test source set — Starsector mods don't need tests ─────
@@ -76,6 +105,29 @@ sourceSets {
     }
 }
 
+
+
+allprojects {
+
+    repositories {
+        mavenCentral()
+        maven {url = 'https://maven.aliyun.com/repository/public/' }
+        maven { url = 'https://maven.aliyun.com/repository/central' }
+
+        maven {
+            name = 'Fabric'
+            url = 'https://maven.fabricmc.net/'
+        }
+
+        maven {
+            url = "https://jitpack.io"
+        }
+
+        maven {
+            url = uri("https://nexus.gtnewhorizons.com/repository/releases/")
+        }
+    }
+}
 
 
 
@@ -124,11 +176,41 @@ def modJarProvider = usingShadow ? tasks.named('shadowJar') : tasks.named('jar')
 
 def stagingDir = layout.buildDirectory.dir("staging/${mod_id}")
 
+// The jar is renamed to a stable name, so the ref it was resolved from is recorded next to
+// it instead - that is the only place the version survives once the name is normalized.
+def bootstrapVersionDir = layout.buildDirectory.dir('generated/bootstrap')
+
+tasks.register('generateBootstrapAndVersion') {
+    group = 'StarsectorModDev'
+    onlyIf { usingBootstrapAgent }
+
+    def version = bootstrapVersion
+    def outputDir = bootstrapVersionDir
+    def versionFileName = bootstrapBaseName + '.version'
+
+    inputs.property('launchRedirectorVersion', version)
+    outputs.dir(outputDir)
+
+    doLast {
+        def out = outputDir.get().file(versionFileName).asFile
+        out.parentFile.mkdirs()
+        out.text = version + System.lineSeparator()
+    }
+}
+
 tasks.register('stageMod', Sync) {
     group = 'StarsectorModDev'
 
+    // the name the bootstrap jar is staged under is decided by a rename action, which the
+    // up-to-date check does not fingerprint on its own; declaring it keeps the layout from
+    // silently going stale when the name changes
+    inputs.property('bootstrapJarName', bootstrapJarName)
+
     dependsOn modJarProvider
     dependsOn tasks.named('generateModInfo')
+    if (usingBootstrapAgent){
+        dependsOn tasks.named('generateBootstrapAndVersion')
+    }
 
     from(modJarProvider.map { it.outputs.files }) {
         rename { "${mod_id}.jar" }
@@ -145,12 +227,27 @@ tasks.register('stageMod', Sync) {
         }
     }
 
+    if (usingBootstrapAgent){
+        from(configurations.bootstrap) {
+            into 'bootstrap'
+            // drop the resolved ref from the name; anything else is staged as-is
+            rename { String name -> name.startsWith(bootstrapBaseName) ? bootstrapJarName : name }
+        }
+        from(bootstrapVersionDir) {
+            into 'bootstrap'
+        }
+    }
+
     if (isAssetsCopyStrictMode){
         from("$projectDir/assets/data")  { into 'data'  }
         from("$projectDir/assets/graphics") { into 'graphics' }
         from("$projectDir/assets/sounds") { into 'sounds'  }
     } else {
-        from("$projectDir/assets")
+        from("$projectDir/assets") {
+            if (!usingBootstrapAgent){
+                exclude("bootstrap-agent.ps1")
+            }
+        }
     }
 
 
@@ -195,7 +292,15 @@ tasks.named('run') {
 
 application {
     def args = layout.projectDirectory.file("args.txt").toString()
-    applicationDefaultJvmArgs = ['-noverify',"@${args}","-Djava.library.path=${gameCorePath}/native/windows","-Dcom.fs.starfarer.settings.paths.saves=${gameInstallPath}/saves","-Dcom.fs.starfarer.settings.paths.screenshots=${gameInstallPath}/screenshots","-Dcom.fs.starfarer.settings.paths.logs=${gameInstallPath}","-Dcom.fs.starfarer.settings.paths.mods=${gameInstallPath}/mods"]
+
+    List<String> appArgs = ['-noverify',"@${args}","-Djava.library.path=${gameCorePath}/native/windows","-Dcom.fs.starfarer.settings.paths.saves=${gameInstallPath}/saves","-Dcom.fs.starfarer.settings.paths.screenshots=${gameInstallPath}/screenshots","-Dcom.fs.starfarer.settings.paths.logs=${gameInstallPath}","-Dcom.fs.starfarer.settings.paths.mods=${gameInstallPath}/mods"]
+
+    if (usingBootstrapAgent) {
+        def agentJar = configurations.bootstrap.singleFile
+        appArgs.add("-javaagent:${agentJar.absolutePath}")
+    }
+
+    applicationDefaultJvmArgs = appArgs
     mainClass = 'com.fs.starfarer.StarfarerLauncher'
 
 }

@@ -1,0 +1,79 @@
+[versions]
+
+## game
+janino = "2.7.8"
+lwjgl = "2.9.3"
+xstream = "1.4.10"
+json = "20140107"
+
+jaxb = "3.0.2"
+jaxb-api = "2.4.0-b180830.0359"
+
+jinput = "2.0.7"
+
+jorbis = "0.0.17.4"
+webp-imageio = "0.1.6"
+
+## nanoforge
+rfb = "1.1.2"
+mixin = "0.17.4+mixin.0.8.7"
+mixin-extras = "0.5.5"
+
+## ref of NanoForged/LaunchRedirector; jitpack resolves it and names the artifact after it,
+## so the build renames the jar and records this value in bootstrap/LaunchRedirector.version
+launchredirector = "aeb1f171c7"
+
+
+## misc
+log4j1 = "1.2.9"
+
+log4j2 = "2.26.1"
+slf4j = "2.0.19"
+
+[libraries]
+
+## game
+janino = { module = "org.codehaus.janino:janino", version.ref ="janino" }
+janino-commons-compiler = { module = "org.codehaus.janino:commons-compiler", version.ref ="janino" }
+janino-commons-compiler-jdk = { module = "org.codehaus.janino:commons-compiler-jdk", version.ref ="janino" }
+
+xstream = {module = "com.thoughtworks.xstream:xstream" , version.ref ="xstream"}
+json = {module = "org.json:json" , version.ref = "json"}
+jaxb-txw2 = {module = "org.glassfish.jaxb:txw2" ,version.ref =  "jaxb"}
+jaxb-api = {module = "javax.xml.bind:jaxb-api" , version.ref = "jaxb-api"}
+
+jinput = {module = "net.java.jinput:jinput", version.ref = "jinput"}
+jinput-platform = {module = "net.java.jinput:jinput-platform", version.ref = "jinput"}
+
+jorbis = {module = "com.googlecode.soundlibs:jorbis" , version.ref = "jorbis"}
+webp-imageio = {module = "org.sejda.imageio:webp-imageio", version.ref = "webp-imageio"}
+
+## nanoforge
+rfb = {module = "com.gtnewhorizons.retrofuturabootstrap:RetroFuturaBootstrap", version.ref = "rfb"}
+mixin = {module = "net.fabricmc:sponge-mixin", version.ref = "mixin"}
+mixin-extras = {module = "io.github.llamalad7:mixinextras-common", version.ref = "mixin-extras"}
+
+
+## misc
+log4j1 = {module = "log4j:log4j" , version.ref = "log4j1"}
+
+lwjgl = {module = "org.lwjgl.lwjgl:lwjgl", version.ref = "lwjgl"}
+lwjgl-platform = {module = "org.lwjgl.lwjgl:lwjgl-platform", version.ref = "lwjgl"}
+lwjgl_util = {module = "org.lwjgl.lwjgl:lwjgl_util", version.ref = "lwjgl"}
+
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+log4j-over-slf4j = { module = "org.slf4j:log4j-over-slf4j", version.ref = "slf4j" }
+log4j-api = { module = "org.apache.logging.log4j:log4j-api", version.ref = "log4j2" }
+log4j-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "log4j2" }
+log4j-slf4j2-impl = { module = "org.apache.logging.log4j:log4j-slf4j2-impl", version.ref = "log4j2" }
+
+[bundles]
+
+gameDeps = ["janino","janino-commons-compiler","janino-commons-compiler-jdk","xstream","json","jaxb-api","jaxb-txw2","jinput","jinput-platform","jorbis","webp-imageio"]
+
+
+lwjgl1 = ["lwjgl","lwjgl-platform","lwjgl_util"]
+
+log4jxWithSLF4j = ["slf4j-api","log4j-over-slf4j","log4j-api","log4j-core","log4j-slf4j2-impl"]
+
+liteLoaderDeps =["mixin","mixin-extras","rfb"]
