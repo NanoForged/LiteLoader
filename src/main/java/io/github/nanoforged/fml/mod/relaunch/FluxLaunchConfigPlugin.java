@@ -13,6 +13,8 @@ import static io.github.nanoforged.fml.mod.ModPlugin.getModLocation;
 @AutoService(ILaunchConfigPlugin.class)
 @ILaunchConfigPlugin.Order(value = 1337)
 public class FluxLaunchConfigPlugin implements ILaunchConfigPlugin {
+
+
     @Override
     public LaunchContext process(MutableLaunchContext context) {
         return context

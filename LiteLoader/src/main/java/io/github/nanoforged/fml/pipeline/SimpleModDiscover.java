@@ -10,7 +10,6 @@ import net.minecraft.launchwrapper.LaunchClassLoader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.net.MalformedURLException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -54,15 +53,10 @@ public final class SimpleModDiscover {
 
     private static List<PluginResult> processCorePlugins(List<IFluxCorePlugin> plugins, LaunchClassLoader launchClassLoader) {
 
-        var bb = Launch.blackboard;
+
         List<PluginResult> results = new ArrayList<>();
         var sorted = new ArrayList<>(plugins);
 
-        sorted.forEach(p -> {
-            if(p instanceof IFluxLiteLoaderExtension extension) {
-                extension.configure(launchClassLoader, bb);
-            }
-        });
 
 
         sorted.sort(
@@ -73,11 +67,35 @@ public final class SimpleModDiscover {
             results.add(new PluginResult(plugin.id(), plugin.transformers(), plugin.mixinConfigs()));
         }
 
+        handleConfigure(results,sorted,launchClassLoader);
+
         return List.copyOf(results);
     }
 
 
+    private static void handleConfigure(List<PluginResult> results, List<IFluxCorePlugin> plugins, LaunchClassLoader launchClassLoader) {
+        var bb = Launch.blackboard;
+        var ids = results.stream().map(PluginResult::id).toList();
+        bb.put("flux.lite.plugins", ids);
 
+        var mixins = new ArrayList<>();
+        results.forEach(result -> {
+            mixins.addAll(result.mixins);
+        });
+        bb.put("flux.lite.plugins.mixin", mixins);
+
+        var transformers = new ArrayList<>();
+        results.forEach(result -> {
+            transformers.addAll(result.transformers);
+        });
+        bb.put("flux.lite.plugins.transformers", transformers);
+
+        plugins.forEach(p -> {
+            if(p instanceof IFluxLiteLoaderExtension extension) {
+                extension.configure(launchClassLoader, bb);
+            }
+        });
+    }
 
     public static record PluginResult(Identifier id, List<String> transformers, List<String> mixins) {}
 }
