@@ -7,13 +7,19 @@ import io.github.nanoforged.fml.api.spi.ext.IFluxLiteLoaderExtension;
 import io.github.nanoforged.fml.utils.PathUtils;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraft.launchwrapper.LaunchClassLoader;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import java.net.MalformedURLException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 public final class SimpleModDiscover {
+
+    private static final Logger LOGGER = LogManager.getLogger("Flux/Discover");
     public static final Path COREMOD_PATH = PathUtils.getModsPath().resolve("coremods");
 
 
@@ -33,11 +39,16 @@ public final class SimpleModDiscover {
             COREMOD_PATH.toFile().mkdirs();
         }
 
-        try {
-            launchClassLoader.addURL(COREMOD_PATH.toUri().toURL());
-        } catch (Exception e) {
-            throw new RuntimeException("Cannot append Classpath form COREMOD_PATH" + COREMOD_PATH, e);
-        }
+        var files = List.of(Objects.requireNonNull(COREMOD_PATH.toFile().listFiles()));
+
+        files.forEach(file -> {
+            try {
+                launchClassLoader.addURL(file.toPath().toUri().toURL());
+            } catch (Exception e) {
+               LOGGER.warn("Cannot append Classpath for :{}",file, e);
+            }
+        });
+
     }
 
 

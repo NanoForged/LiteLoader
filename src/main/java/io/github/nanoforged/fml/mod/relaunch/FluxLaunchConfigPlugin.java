@@ -1,12 +1,10 @@
 package io.github.nanoforged.fml.mod.relaunch;
 
 import com.google.auto.service.AutoService;
-import io.github.nanoforged.fml.utils.PathUtils;
 import io.github.nanoforged.launchredirector.api.ILaunchConfigPlugin;
 import io.github.nanoforged.launchredirector.api.LaunchContext;
 import io.github.nanoforged.launchredirector.api.MutableLaunchContext;
 
-import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.Set;
 
