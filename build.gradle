@@ -110,7 +110,6 @@ sourceSets {
 allprojects {
 
     repositories {
-        mavenCentral()
         maven {url = 'https://maven.aliyun.com/repository/public/' }
         maven { url = 'https://maven.aliyun.com/repository/central' }
 
@@ -126,6 +125,7 @@ allprojects {
         maven {
             url = uri("https://nexus.gtnewhorizons.com/repository/releases/")
         }
+        mavenCentral()
     }
 }
 
