@@ -3,7 +3,9 @@ package io.github.nanoforged.fml.utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -18,7 +20,6 @@ public final class PathUtils {
 
 
     private static  Path gameJarPath = null;
-    private static  Boolean isGameMainClassExist = null;
     private static  Boolean isClassicInstall = null;
     private static  Path gameHomePath = null;
     private static  Path jarLocation = null;
@@ -63,16 +64,19 @@ public final class PathUtils {
         }
     }
 
-    private static boolean isGameMainClassExist() {
-        if (isGameMainClassExist == null) {
-            try {
-                Class.forName(MAIN_CLASS);
-                isGameMainClassExist = true;
-            } catch (ClassNotFoundException e) {
-                isGameMainClassExist = false;
+    private static URL findGameMainClassResource() {
+        String resourcePath = MAIN_CLASS.replace('.', '/') + ".class";
+
+        // TCCL is LCL
+        ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+        if (contextLoader != null) {
+            URL found = contextLoader.getResource(resourcePath);
+            if (found != null) {
+                return found;
             }
         }
-        return isGameMainClassExist;
+        // Fallback
+        return PathUtils.class.getClassLoader().getResource(resourcePath);
     }
 
     public static Path getGameJarPath() {
@@ -83,25 +87,26 @@ public final class PathUtils {
     }
 
     private static Path computeGameJarPath() {
-        if (!isGameMainClassExist()) {
+        URL resource = findGameMainClassResource();
+        if (resource == null) {
             LOGGER.error("Game main class {} not found. Cannot determine game jar path.", MAIN_CLASS);
             throw new IllegalStateException("Game main class not found: " + MAIN_CLASS);
         }
 
+        String location = resource.toString();
+
         try {
-            return Paths.get(Class.forName(MAIN_CLASS).getProtectionDomain()
-                    .getCodeSource()
-                    .getLocation()
-                    .toURI());
-        } catch (ClassNotFoundException e) {
-            // Should not happen as we already checked
-            LOGGER.error("Unexpected: Game main class disappeared", e);
-            throw new IllegalStateException("Game main class disappeared", e);
-        } catch (URISyntaxException e) {
-            LOGGER.error("Invalid URI for game jar location", e);
-            throw new IllegalArgumentException("Invalid game jar URI", e);
+            if (location.startsWith("jar:")) {
+                return Paths.get(URI.create(location.substring(4, location.indexOf("!/"))));
+            }
+            throw new IllegalStateException(
+                    "Unsupported class resource scheme for " + MAIN_CLASS + ": " + resource);
+        } catch (IllegalArgumentException e) {
+            LOGGER.error("Invalid URI for game jar location: {}", resource, e);
+            throw new IllegalArgumentException("Invalid game jar URI: " + resource, e);
         }
     }
+
 
     public static Path getSavesPath() {
         return SAVES_PATH != null ? Paths.get(SAVES_PATH) : getGameHome().resolve("saves");

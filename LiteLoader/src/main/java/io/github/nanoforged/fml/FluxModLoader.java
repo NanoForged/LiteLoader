@@ -9,9 +9,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.Mixins;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.ServiceLoader;
+import java.util.*;
 
 
 public final class FluxModLoader {
@@ -23,7 +21,8 @@ public final class FluxModLoader {
 
     private static final List<String> MIXINS = new ArrayList<>();
 
-
+    private static final Set<String> REGISTERED_TRANSFORMERS = new HashSet<>();
+    private static final Set<String> REGISTERING_MIXINS = new HashSet<>();
 
     public static void run(LaunchClassLoader launchClassLoader) {
 
@@ -31,20 +30,30 @@ public final class FluxModLoader {
 
         var results = SimpleModDiscover.discover(launchClassLoader);
 
-        for (var result : results) {
-            var transformers = result.transformers();
-            var mixins = result.mixins();
-            transformers.forEach(transformer -> {
-                launchClassLoader.addTransformerExclusion(transformer);
-                launchClassLoader.registerTransformer(transformer);
-            });
+        results.forEach(result -> handleResult(launchClassLoader, result));
 
-            MIXINS.addAll(mixins);
-            LOGGER.info("installed CoreMod:{}", result.id());
-            LOGGER.info("mixins:{}", mixins);
-            LOGGER.info("transformers:{}", transformers);
-        }
         MIXINS.forEach(Mixins::addConfiguration);
+    }
+
+    private static void handleResult(LaunchClassLoader launchClassLoader, SimpleModDiscover.PluginResult result) {
+
+        for (String transformer : result.transformers()) {
+            if (!REGISTERED_TRANSFORMERS.add(transformer)) {
+                LOGGER.warn("duplicate transformer declaration ignored: {} (from {})", transformer, result.id());
+                continue;
+            }
+            launchClassLoader.addTransformerExclusion(transformer);
+            launchClassLoader.registerTransformer(transformer);
+        }
+
+        for (String mixin : result.mixins()) {
+            if (!REGISTERING_MIXINS.add(mixin)) {
+                LOGGER.warn("duplicate mixin declaration ignored: {}", mixin);
+                continue;
+            }
+            MIXINS.add(mixin);
+        }
+        LOGGER.info("installed CoreMod:{} mixins:{} transformers:{}", result.id(), result.mixins(), result.transformers());
     }
 
 
