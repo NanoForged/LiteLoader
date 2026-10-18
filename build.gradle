@@ -160,6 +160,11 @@ if (usingShadow) {
 tasks.register('generateModInfo') {
     group = 'StarsectorModDev'
 
+    // mod_Meta is assembled from the mod_* project properties, so the whole map has to take
+    // part in the up-to-date check: without it a changed mod_version leaves a stale
+    // mod_info.json behind while the archive name already carries the new version.
+    inputs.property('modMeta', mod_Meta)
+
     def outputDir = layout.buildDirectory.dir('generated/modInfo')
     outputs.dir(outputDir)
 
@@ -274,6 +279,10 @@ tasks.register('releaseZip', Zip) {
     group = 'StarsectorModDev'
 
     dependsOn tasks.named('stageMod')
+
+    // keep the mod folder as the archive root, so unpacking into mods/ lands in
+    // mods/<mod_id>/ instead of scattering mod_info.json, jars/ and libs/ over mods/
+    into mod_id
 
     archiveFileName = "${mod_name}-${mod_version}.zip"
     destinationDirectory = layout.buildDirectory.dir('dist')

@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read build metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          starfarer="$(grep -E '^starsector_version=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
+          case "${version}" in
+            *-*) prerelease=true ;;
+            *)   prerelease=false ;;
+          esac
+          {
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "starsector_version=${starfarer}"
+            echo "prerelease=${prerelease}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Fetch Starfarer API jar
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/fetch-starfarer-api.py \
+            --version "${{ steps.meta.outputs.starsector_version }}" \
+            --output "${RUNNER_TEMP}/mock-starsector/starsector-core/starfarer.api.jar"
+
+      - name: Warm up dependencies
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          for attempt in 1 2 3; do
+            if ./gradlew help --console=plain; then
+              exit 0
+            fi
+            echo "dependency resolution failed (attempt ${attempt}/3), retrying in 20s"
+            sleep 20
+          done
+          exit 1
+
+      - name: Build release zip
+        run: |
+          set -euo pipefail
+          ./gradlew releaseZip --console=plain \
+            -Pmod_version="${{ steps.meta.outputs.version }}" \
+            -Pstarsector_path="${RUNNER_TEMP}/mock-starsector"
+
+      - name: Collect assets
+        run: |
+          set -euo pipefail
+          version="${{ steps.meta.outputs.version }}"
+          mkdir -p release-assets
+          cp build/libs/FluxModLoader.jar "release-assets/FluxModLoader-${version}.jar"
+          zip_path="$(find build/dist -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          if [ -z "${zip_path}" ]; then
+            echo "releaseZip produced no archive under build/dist" >&2
+            exit 1
+          fi
+          cp "${zip_path}" "release-assets/FluxModLoader-${version}.zip"
+          ls -l release-assets
+
+      - name: Verify assets
+        run: |
+          set -euo pipefail
+          version="${{ steps.meta.outputs.version }}"
+          jar="release-assets/FluxModLoader-${version}.jar"
+          zip="release-assets/FluxModLoader-${version}.zip"
+
+          jar_entries="$(unzip -Z1 "${jar}")"
+          grep -qx 'io/github/nanoforged/fml/mod/ModPlugin.class' <<< "${jar_entries}"
+
+          zip_entries="$(unzip -Z1 "${zip}")"
+          grep -Eq '(^|/)jars/FluxModLoader\.jar$' <<< "${zip_entries}"
+
+          mod_info="$(grep -m1 -E '(^|/)mod_info\.json$' <<< "${zip_entries}")"
+          [ -n "${mod_info}" ]
+          mod_info_json="$(unzip -p "${zip}" "${mod_info}")"
+          grep -Eq '"version"[[:space:]]*:[[:space:]]*"'"${version}"'"' <<< "${mod_info_json}"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          generate_release_notes: true
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/FluxModLoader-${{ steps.meta.outputs.version }}.jar
+            release-assets/FluxModLoader-${{ steps.meta.outputs.version }}.zip

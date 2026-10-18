@@ -1,7 +1,6 @@
 package io.github.nanoforged.fml.mod;
 
 import com.fs.starfarer.api.BaseModPlugin;
-import io.github.nanoforged.fml.mod.relaunch.FluxLaunchConfigPlugin;
 
 import java.net.URISyntaxException;
 import java.nio.file.Path;
