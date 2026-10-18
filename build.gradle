@@ -284,7 +284,7 @@ tasks.register('releaseZip', Zip) {
     // mods/<mod_id>/ instead of scattering mod_info.json, jars/ and libs/ over mods/
     into mod_id
 
-    archiveFileName = "${mod_name}-${mod_version}.zip"
+    archiveFileName = "${mod_id}-${mod_version}.zip"
     destinationDirectory = layout.buildDirectory.dir('dist')
 
     from stagingDir
