@@ -1,6 +1,7 @@
 package io.github.nanoforged.fml.mod;
 
 import com.fs.starfarer.api.BaseModPlugin;
+import org.lwjgl.Sys;
 
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -45,7 +46,10 @@ public class ModPlugin extends BaseModPlugin {
             """;
 
     public ModPlugin() {
-        if (!isInstalled()) throw new MissingRuntimeEnvironmentException(NOTICE_MESSAGE.formatted(randomMessage(), MOD_NAME, MOD_NAME,detectRFBInstalled(),detectFMLInstalled()));
+        if (!isInstalled()){
+            Sys.alert(MOD_NAME,NOTICE_MESSAGE.formatted(randomMessage(), MOD_NAME, MOD_NAME,detectRFBInstalled(),detectFMLInstalled()));
+            System.exit(1337);
+        }
     }
 
 
@@ -69,11 +73,6 @@ public class ModPlugin extends BaseModPlugin {
         }
     }
 
-    static class MissingRuntimeEnvironmentException extends RuntimeException {
-        public MissingRuntimeEnvironmentException(String message) {
-            super(message);
-        }
-    }
 
     public static Path getModLocation() {
         try {
